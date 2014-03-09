@@ -28,9 +28,12 @@
 
 # Check for root
 if [ "$(id -u)" != "0" ]; then
-	echo “This script must be run as root” 2>&1
+	echo "This script must be run as root" 2>&1
 	exit 1
 fi
+
+
+. includes/common.sh
 
 # Debian / Ubuntu
 if which dpkg &> /dev/null; then
