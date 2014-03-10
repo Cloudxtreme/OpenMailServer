@@ -1,5 +1,5 @@
 user = MYSLQ_POSTFIX_USER
-password = MYSQL_POSTFIX_PASSWORD
+password = MYSLQ_POSTFIX_PASS
 hosts = 127.0.0.1
 dbname = MYSQL_POSTFIX_DB
 table = alias

@@ -65,8 +65,8 @@ virtual_overquota_bounce = yes
 
 # SSL
 
-smtpd_tls_cert_file = /etc/ssl/private/server.crt
-smtpd_tls_key_file = /etc/ssl/private/server.key
+smtpd_tls_cert_file = SSL_CERT_FILE
+smtpd_tls_key_file = SSL_KEY_FILE
 
 # Restrictions
 

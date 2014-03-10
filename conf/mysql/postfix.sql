@@ -16,17 +16,9 @@
 # If you run this file twice (2x) you will get an error on the user creation in MySQL.
 # To go around this you can either comment the lines below "USE MySQL" until "USE postfix".
 # Or you can remove the users from the database and run it again.
-#
-# You can create the database from the shell with:
-#
-# mysql -u root [-p] < DATABASE_MYSQL.TXT
 
-#
-# Postfix / MySQL
-#
-CREATE DATABASE postfix;
 
-USE postfix;
+
 #
 # Table structure for table admin
 #

@@ -25,7 +25,7 @@
 
 
 function create_password {
-	PASS=`apg -a 1 -n 1 -m 16 -x 18 -M lcns`
+	PASS=`apg -a 1 -n 1 -m 16 -x 18 -M lcn -E '/'`
 	echo -n ${PASS}
 	exit 0
 }

@@ -26,3 +26,15 @@
 
 # This script checks for any signs of an existing installation
 # so we can abort before any damage is caused
+
+
+
+# Check for Postfix
+
+# Check for Dovecot
+
+# Check for MySQL
+
+# Check for Apache2
+
+# Check for other stuff that might break installation

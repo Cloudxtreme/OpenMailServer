@@ -41,15 +41,6 @@ apt-get -y install apg
 
 clear
 
-echo "Please enter the hostname you would like for this server ($(cat /etc/hostname)): "
-read HOSTNAME
-if [[ "${HOSTNAME}" != "" ]]; then
-	echo "Setting hostname"
-	echo ${HOSTNAME} > /etc/hostname
-	hostname ${HOSTNAME}
-fi
-
-
 #
 # Set up global variables
 #
@@ -62,16 +53,41 @@ MYSQL_POSTFIX_PASS=`create_password`
 MYSQL_POSTFIX_DB=postfix
 
 VMAIL_USER=vmail
+VMAIL_GROUP=vmail
 VMAIL_HOME=/home/vmail
+
+SSL_COUNTRY_ISO2=GB
+SSL_CITY=Leominster
+SSL_STATE_PROVINCE=Herefordshire
+SSL_CERT_FILE=/etc/ssl/private/server.crt
+SSL_KEY_FILE=/etc/ssl/private/server.key
+
+
+
+#
+# Ask for hostname
+#
+echo "Please enter the hostname you would like for this server ($(hostname)): "
+read HOSTNAME
+if [[ "${HOSTNAME}" != "" ]]; then
+	echo "Setting hostname"
+	echo ${HOSTNAME} > /etc/hostname
+	hostname ${HOSTNAME}
+else
+	echo "Leaving hostname unchanged"
+	HOSTNAME="$(hostname)"
+fi
+
 
 #
 # Add vmail user
 #
-sudo groupadd -g 5000 ${VMAIL_USER}
-sudo useradd -m -g ${VMAIL_USER} -u 5000 -d ${VMAIL_HOME} -s /bin/bash ${VMAIL_USER}
+sudo groupadd -g 5000 ${VMAIL_GROUP}
+sudo useradd -m -g ${VMAIL_GROUP} -u 5000 -d ${VMAIL_HOME} -s /bin/bash ${VMAIL_USER}
+
 
 #
-# Generate and set MySQL passwords
+# Generate and set MySQL passwords for unattended install
 #
 echo "mysql-server mysql-server/root_password password ${MYSQL_ROOT_PASS}" | debconf-set-selections 
 echo "mysql-server mysql-server/root_password_again password ${MYSQL_ROOT_PASS}" | debconf-set-selections 
@@ -88,13 +104,14 @@ echo "postfix postfix/destinations string localhost.localdomain, localhost" | de
 #
 # Install required packages
 #
-apt-get -y install openssl apache2 php5 postfix-tls postfix-mysql libsasl2 libsasl2-modules dovecot-common dovecot-mysql dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-managesieved dovecot-sieve mysql-server spamassassin clamav amavisd-new
+apt-get -y install openssl apache2 php5 postfix-mysql libsasl2-modules dovecot-common dovecot-mysql dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-managesieved dovecot-sieve mysql-server spamassassin clamav amavisd-new
 
 
 #
 # Creating MySQL users & structure
 #
-mysql -uroot -p"${MYSQL_ROOT_PASS}" -e "GRANT SELECT, INSERT, DELETE, UPDATE ON ${MYSQL_POSTFIX_DB}.* TO ${MYSQL_POSTFIX_USER}@localhost IDENTIFIED BY '${MYSQL_POSTFIX_PASSWORD}'";
+mysql -uroot -p"${MYSQL_ROOT_PASS}" -e "GRANT SELECT, INSERT, DELETE, UPDATE ON ${MYSQL_POSTFIX_DB}.* TO ${MYSQL_POSTFIX_USER}@localhost IDENTIFIED BY '${MYSQL_POSTFIX_PASSWORD}';";
+mysql -uroot -p"${MYSQL_ROOT_PASS}" -e "CREATE DATABASE ${MYSQL_POSTFIX_DB};"
 mysql -uroot -p"${MYSQL_ROOT_PASS}" ${MYSQL_POSTFIX_DB} < ./conf/mysql/postfix.sql
 
 
@@ -132,14 +149,18 @@ chmod 640 /etc/postfix/mysql_*.cf
 sed -i "s/MYSQL_POSTFIX_USER/${MYSQL_POSTFIX_USER}/g" /etc/postfix/*.cf
 sed -i "s/MYSQL_POSTFIX_PASS/${MYSQL_POSTFIX_PASS}/g" /etc/postfix/*.cf
 sed -i "s/MYSQL_POSTFIX_DB/${MYSQL_POSTFIX_DB}/g" /etc/postfix/*.cf
-sed -i "s/VMAIL_USER/${VMAIL_USER}/g" /etc/postfix/*.cf
-sed -i "s/VMAIL_HOME/${VMAIL_HOME}/g" /etc/postfix/*.cf
+sed -i "s=VMAIL_USER=${VMAIL_USER}=g" /etc/postfix/*.cf
+sed -i "s=VMAIL_GROUP=${VMAIL_GROUP}=g" /etc/postfix/*.cf
+sed -i "s=VMAIL_HOME=${VMAIL_HOME}=g" /etc/postfix/*.cf
+sed -i "s=SSL_CERT_FILE=${SSL_CERT_FILE}=g" /etc/postfix/*.cf
+sed -i "s=SSL_KEY_FILE=${SSL_KEY_FILE}=g" /etc/postfix/*.cf
 
 sed -i "s/MYSQL_POSTFIX_USER/${MYSQL_POSTFIX_USER}/g" /etc/postfix/sasl/smtpd.conf
 sed -i "s/MYSQL_POSTFIX_PASS/${MYSQL_POSTFIX_PASS}/g" /etc/postfix/sasl/smtpd.conf
 sed -i "s/MYSQL_POSTFIX_DB/${MYSQL_POSTFIX_DB}/g" /etc/postfix/sasl/smtpd.conf
-sed -i "s/VMAIL_USER/${VMAIL_USER}/g" /etc/postfix/sasl/smtpd.conf
-sed -i "s/VMAIL_HOME/${VMAIL_HOME}/g" /etc/postfix/sasl/smtpd.conf
+sed -i "s=VMAIL_USER=${VMAIL_USER}=g" /etc/postfix/sasl/smtpd.conf
+sed -i "s=VMAIL_GROUP=${VMAIL_GROUP}=g" /etc/postfix/sasl/smtpd.conf
+sed -i "s=VMAIL_HOME=${VMAIL_HOME}=g" /etc/postfix/sasl/smtpd.conf
 
 #
 # Allow postfix to access sasl user group
@@ -150,21 +171,48 @@ usermod -G sasl postfix
 #
 # Generate transport maps
 #
-postmap /etc/postfix/transport
+#postmap /etc/postfix/transport
 
 
 #
 # Generate SSL keys
 #
-openssl req -new -x509 -newkey rsa:2048 -days 365 -keyout /etc/ssl/certs/server.key -out /etc/ssl/certs/server.crt
-openssl rsa -in /etc/ssl/certs/server.key -out /etc/ssl/certs/server.key
-chown nobody:nobody /etc/ssl/certs/server.key /etc/ssl/certs/server.crt
-chmod 400 /etc/ssl/certs/server.key
-chmod 444 /etc/ssl/certs/server.crt
-mv /etc/ssl/certs/server.key /etc/ssl/private/
-mv /etc/ssl/certs/server.crt /etc/ssl/private/
+openssl req \
+	-x509 -nodes -days 3650 -newkey rsa:2048 \
+	-subj "/C=${SSL_COUNTRY_ISO2}/ST=${SSL_STATE_PROVINCE}/L=${SSL_CITY}/O=${HOSTNAME}/OU=IT/CN=${HOSTNAME}/emailAddress=root@${HOSTNAME}/" \
+	-out ${SSL_CERT_FILE} -keyout ${SSL_KEY_FILE}
+
+# Set correct file permission.
+chmod 0444 ${SSL_CERT_FILE}
+chmod 0444 ${SSL_KEY_FILE}
 
 #
 # Restart services
 #
+
+
+#
+# Save important vars to installations.txt
+#
+cat > installation.txt <<TEXTBLOCK
+
+MYSQL_ROOT_PASS=${MYSQL_ROOT_PASS}
+
+MYSQL_POSTFIX_USER=${MYSQL_POSTFIX_USER}
+MYSQL_POSTFIX_PASS=${MYSQL_POSTFIX_PASS}
+MYSQL_POSTFIX_DB=${MYSQL_POSTFIX_DB}
+
+VMAIL_USER=${VMAIL_USER}
+VMAIL_GROUP=${VMAIL_GROUP}
+VMAIL_HOME=${VMAIL_HOME}
+
+SSL_COUNTRY_ISO2=${SSL_COUNTRY_ISO2}
+SSL_CITY=${SSL_CITY}
+SSL_STATE_PROVINCE=${SSL_STATE_PROVINCE}
+SSL_CERT_FILE=${SSL_CERT_FILE}
+SSL_KEY_FILE=${SSL_KEY_FILE}
+
+TEXTBLOCK
+
+chmod 600 installation.txt
 
