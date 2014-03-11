@@ -1,0 +1,6 @@
+user        = MYSQL_POSTFIX_USER
+password    = MYSQL_POSTFIX_PASS
+hosts       = 127.0.0.1
+port        = 3306
+dbname      = MYSQL_POSTFIX_DB
+query       = SELECT domain.recipient_bcc FROM domain WHERE domain.domain='%d' AND domain.backupmx=0 AND domain.active=1 AND domain.recipient_bcc<>''

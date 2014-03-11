@@ -6,7 +6,7 @@
 # is /etc/mailname.
 #myorigin = /etc/mailname
 
-smtpd_banner = $myhostname ESMTP $mail_name (Ubuntu)
+smtpd_banner = $myhostname ESMTP $mail_name (OpenMailServer)
 biff = no
 
 # appending .domain is the MUA's job.
@@ -39,29 +39,38 @@ recipient_delimiter = +
 inet_interfaces = all
 
 
+######################################
+#									 #
+#   OpenMailServer settings below    #
+#									 #
+######################################
+
+# Transport maps
+
+transport_maps = mysql:/etc/postfix/mysql_transport_maps_user.cf, mysql:mysql_transport_maps_domain.cf
+
 # Virtual Mailbox Domain Settings
 
-virtual_alias_maps = mysql:/etc/postfix/mysql_virtual_alias_maps.cf
+virtual_alias_maps = mysql:/etc/postfix/mysql_virtual_alias_maps_cf, mysql:/etc/postfix/mysql_domain_alias_maps.cf, mysql:/etc/postfix/mysql_catchall_maps.cf, mysql:/etc/postfix/mysql_domain_alias_catchall_maps.cf
 virtual_mailbox_domains = mysql:/etc/postfix/mysql_virtual_domains_maps.cf
 virtual_mailbox_maps = mysql:/etc/postfix/mysql_virtual_mailbox_maps.cf
+sender_bcc_maps = mysql:/etc/postfix/mysql_sender_bcc_maps_user.cf, mysql:/etc/postfix/mysql_sender_bcc_maps_domain.cf
+recipient_bcc_maps = mysql:/etc/postfix/mysql_recipient_bcc_maps_user.cf, mysql:/etc/postfix/mysql_recipient_bcc_maps_domain.cf
+relay_domains = $mydestination, mysql:/etc/postfix/mysql_relay_domains_maps.cf
+smtpd_sender_login_maps = mysql:/etc/postfix/mysql_sender_login_maps.cf
+
+
 virtual_mailbox_limit = 51200000
 virtual_minimum_uid = 5000
 virtual_uid_maps = static:5000
 virtual_gid_maps = static:5000
 virtual_mailbox_base = VMAIL_HOME
 virtual_transport = virtual
+
 local_transport = virtual
 local_recipient_maps = $virtual_mailbox_maps
-transport_maps = hash:/etc/postfix/transport
 
-# Additional for quota support
 
-virtual_create_maildirsize = yes
-virtual_mailbox_extended = yes
-virtual_mailbox_limit_maps = mysql:/etc/postfix/mysql_virtual_mailbox_limit_maps.cf
-virtual_mailbox_limit_override = yes
-virtual_maildir_limit_message = Sorry, the your maildir has overdrawn your diskspace quota, please free up some of spaces of your mailbox try again.
-virtual_overquota_bounce = yes
 
 # SSL
 
@@ -70,7 +79,7 @@ smtpd_tls_key_file = SSL_KEY_FILE
 
 # Restrictions
 
-smtpd_recipient_restrictions = reject_unauth_pipelining, permit_mynetworks, permit_sasl_authenticated, reject_non_fqdn_recipient, reject_unknown_recipient_domain reject_unauth_destination, check_policy_service inet:127.0.0.1:10023, permit
+smtpd_recipient_restrictions = reject_unauth_pipelining, permit_mynetworks, permit_sasl_authenticated, reject_non_fqdn_recipient, reject_unknown_recipient_domain reject_unauth_destination, permit
 # modify the existing smtpd_sender_restrictions
 smtpd_sender_restrictions = permit_sasl_authenticated, permit_mynetworks, reject_non_fqdn_sender, reject_unknown_sender_domain, reject_unauth_pipelining, permit
 # then add these

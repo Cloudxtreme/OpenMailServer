@@ -63,7 +63,6 @@ SSL_CERT_FILE=/etc/ssl/private/server.crt
 SSL_KEY_FILE=/etc/ssl/private/server.key
 
 
-
 #
 # Ask for hostname
 #
@@ -77,6 +76,19 @@ else
 	echo "Leaving hostname unchanged"
 	HOSTNAME="$(hostname)"
 fi
+
+
+#
+# Generate SSL keys
+#
+openssl req \
+	-x509 -nodes -days 3650 -newkey rsa:2048 \
+	-subj "/C=${SSL_COUNTRY_ISO2}/ST=${SSL_STATE_PROVINCE}/L=${SSL_CITY}/O=${HOSTNAME}/OU=IT/CN=${HOSTNAME}/emailAddress=root@${HOSTNAME}/" \
+	-out ${SSL_CERT_FILE} -keyout ${SSL_KEY_FILE}
+
+# Set correct file permission.
+chmod 0444 ${SSL_CERT_FILE}
+chmod 0444 ${SSL_KEY_FILE}
 
 
 #
@@ -128,11 +140,19 @@ fi
 
 cp ./conf/postfix/main.cf /etc/postfix/main.cf
 cp ./conf/postfix/master.cf /etc/postfix/master.cf
+
+cp ./conf/postfix/mysql_catch_all_maps.cf /etc/postfix/mysql_catch_all_maps.cf
+cp ./conf/postfix/mysql_domain_alias_catchall_maps.cf /etc/postfix/mysql_domain_alias_catchall_maps.cf
+cp ./conf/postfix/mysql_domain_alias_maps.cf /etc/postfix/mysql_domain_alias_maps.cf
+cp ./conf/postfix/mysql_recipient_bcc_maps_domain.cf /etc/postfix/mysql_recipient_bcc_maps_domain.cf
+cp ./conf/postfix/mysql_recipient_bcc_maps_user.cf /etc/postfix/mysql_recipient_bcc_maps_user.cf
+cp ./conf/postfix/mysql_relay_domains_maps.cf /etc/postfix/mysql_relay_domains_maps.cf
+cp ./conf/postfix/mysql_sender_bcc_maps_domain.cf /etc/postfix/mysql_sender_bcc_maps_domain.cf
+cp ./conf/postfix/mysql_sender_bcc_maps_user.cf /etc/postfix/mysql_sender_bcc_maps_user.cf
+cp ./conf/postfix/mysql_virtual_alias_maps.cf /etc/postfix/mysql_virtual_alias_maps.cf
 cp ./conf/postfix/mysql_virtual_domains_maps.cf /etc/postfix/mysql_virtual_domains_maps.cf
 cp ./conf/postfix/mysql_virtual_mailbox_maps.cf /etc/postfix/mysql_virtual_mailbox_maps.cf
-cp ./conf/postfix/mysql_virtual_mailbox_limit_maps.cf /etc/postfix/mysql_virtual_mailbox_limit_maps.cf
-cp ./conf/postfix/mysql_virtual_alias_maps.cf /etc/postfix/mysql_virtual_alias_maps.cf
-cp ./conf/postfix/mysql_relay_domains_maps.cf /etc/postfix/mysql_relay_domains_maps.cf
+
 cp ./conf/postfix/sasl/smtpd.conf /etc/postfix/sasl/smtpd.conf
 
 
@@ -162,6 +182,7 @@ sed -i "s=VMAIL_USER=${VMAIL_USER}=g" /etc/postfix/sasl/smtpd.conf
 sed -i "s=VMAIL_GROUP=${VMAIL_GROUP}=g" /etc/postfix/sasl/smtpd.conf
 sed -i "s=VMAIL_HOME=${VMAIL_HOME}=g" /etc/postfix/sasl/smtpd.conf
 
+
 #
 # Allow postfix to access sasl user group
 #
@@ -169,26 +190,10 @@ usermod -G sasl postfix
 
 
 #
-# Generate transport maps
-#
-#postmap /etc/postfix/transport
-
-
-#
-# Generate SSL keys
-#
-openssl req \
-	-x509 -nodes -days 3650 -newkey rsa:2048 \
-	-subj "/C=${SSL_COUNTRY_ISO2}/ST=${SSL_STATE_PROVINCE}/L=${SSL_CITY}/O=${HOSTNAME}/OU=IT/CN=${HOSTNAME}/emailAddress=root@${HOSTNAME}/" \
-	-out ${SSL_CERT_FILE} -keyout ${SSL_KEY_FILE}
-
-# Set correct file permission.
-chmod 0444 ${SSL_CERT_FILE}
-chmod 0444 ${SSL_KEY_FILE}
-
-#
 # Restart services
 #
+service postfix restart
+service dovecot restart
 
 
 #
