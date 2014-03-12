@@ -111,7 +111,7 @@ submission inet n       -       n       -       -       smtpd
 
 # Use dovecot deliver program as LDA.
 dovecot unix    -       n       n       -       -      pipe
-    flags=DRhu user=vmail:vmail argv=/usr/libexec/dovecot/deliver -f ${sender} -d ${user}@${domain} -m ${extension}
+    flags=DRhu user=vmail:vmail argv=/usr/lib/dovecot/deliver -f ${sender} -d ${user}@${domain} -m ${extension}
 
 smtp-amavis unix -  -   -   -   2  smtp
     -o smtp_data_done_timeout=1200

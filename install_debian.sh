@@ -116,25 +116,25 @@ echo "postfix postfix/destinations string localhost.localdomain, localhost" | de
 #
 # Install required packages
 #
-apt-get -y install openssl apache2 php5 postfix-mysql libsasl2-modules dovecot-common dovecot-mysql dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-managesieved dovecot-sieve mysql-server spamassassin clamav amavisd-new
+apt-get -y install openssl apache2 php5 postfix-mysql libsasl2-2 sasl2-bin libsasl2-modules dovecot-common dovecot-mysql dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-managesieved dovecot-sieve mysql-server spamassassin clamav amavisd-new
 
 
 #
 # Creating MySQL users & structure
 #
-mysql -uroot -p"${MYSQL_ROOT_PASS}" -e "GRANT SELECT, INSERT, DELETE, UPDATE ON ${MYSQL_POSTFIX_DB}.* TO ${MYSQL_POSTFIX_USER}@localhost IDENTIFIED BY '${MYSQL_POSTFIX_PASSWORD}';";
+mysql -uroot -p"${MYSQL_ROOT_PASS}" -e "GRANT SELECT, INSERT, DELETE, UPDATE ON ${MYSQL_POSTFIX_DB}.* TO ${MYSQL_POSTFIX_USER}@localhost IDENTIFIED BY '${MYSQL_POSTFIX_PASS}';";
 mysql -uroot -p"${MYSQL_ROOT_PASS}" -e "CREATE DATABASE ${MYSQL_POSTFIX_DB};"
 mysql -uroot -p"${MYSQL_ROOT_PASS}" ${MYSQL_POSTFIX_DB} < ./conf/mysql/postfix.sql
 
 
 #
-# Copy config files to locations
+# Configure postfix
 #
-if  [ -f /etc/postfix/main.cf ]; then
+if [ -f /etc/postfix/main.cf ]; then
 	mv /etc/postfix/main.cf /etc/postfix/main.cf.backup 
 fi
 
-if  [ -f /etc/postfix/master.cf ]; then
+if [ -f /etc/postfix/master.cf ]; then
 	mv /etc/postfix/master.cf /etc/postfix/master.cf.backup 
 fi
 
@@ -149,11 +149,12 @@ cp ./conf/postfix/mysql_recipient_bcc_maps_user.cf /etc/postfix/mysql_recipient_
 cp ./conf/postfix/mysql_relay_domains_maps.cf /etc/postfix/mysql_relay_domains_maps.cf
 cp ./conf/postfix/mysql_sender_bcc_maps_domain.cf /etc/postfix/mysql_sender_bcc_maps_domain.cf
 cp ./conf/postfix/mysql_sender_bcc_maps_user.cf /etc/postfix/mysql_sender_bcc_maps_user.cf
+cp ./conf/postfix/mysql_sender_login_maps.cf /etc/postfix/mysql_sender_login_maps.cf
+cp ./conf/postfix/mysql_transport_maps_user.cf /etc/postfix/mysql_transport_maps_user.cf
+cp ./conf/postfix/mysql_transport_maps_domain.cf /etc/postfix/mysql_transport_maps_domain.cf
 cp ./conf/postfix/mysql_virtual_alias_maps.cf /etc/postfix/mysql_virtual_alias_maps.cf
 cp ./conf/postfix/mysql_virtual_domains_maps.cf /etc/postfix/mysql_virtual_domains_maps.cf
 cp ./conf/postfix/mysql_virtual_mailbox_maps.cf /etc/postfix/mysql_virtual_mailbox_maps.cf
-
-cp ./conf/postfix/sasl/smtpd.conf /etc/postfix/sasl/smtpd.conf
 
 
 #
@@ -175,23 +176,96 @@ sed -i "s=VMAIL_HOME=${VMAIL_HOME}=g" /etc/postfix/*.cf
 sed -i "s=SSL_CERT_FILE=${SSL_CERT_FILE}=g" /etc/postfix/*.cf
 sed -i "s=SSL_KEY_FILE=${SSL_KEY_FILE}=g" /etc/postfix/*.cf
 
-sed -i "s/MYSQL_POSTFIX_USER/${MYSQL_POSTFIX_USER}/g" /etc/postfix/sasl/smtpd.conf
-sed -i "s/MYSQL_POSTFIX_PASS/${MYSQL_POSTFIX_PASS}/g" /etc/postfix/sasl/smtpd.conf
-sed -i "s/MYSQL_POSTFIX_DB/${MYSQL_POSTFIX_DB}/g" /etc/postfix/sasl/smtpd.conf
-sed -i "s=VMAIL_USER=${VMAIL_USER}=g" /etc/postfix/sasl/smtpd.conf
-sed -i "s=VMAIL_GROUP=${VMAIL_GROUP}=g" /etc/postfix/sasl/smtpd.conf
-sed -i "s=VMAIL_HOME=${VMAIL_HOME}=g" /etc/postfix/sasl/smtpd.conf
+
+#
+# Configure sasl
+#
+#mkdir -p /var/spool/postfix/var/run/saslauthd
+#usermod -G sasl postfix
+#cp ./conf/postfix/sasl/smtpd.conf /etc/postfix/sasl/smtpd.conf
+#cp ./conf/postfix/sasl/saslauthd /etc/default/saslauthd
+
+#sed -i "s/MYSQL_POSTFIX_USER/${MYSQL_POSTFIX_USER}/g" /etc/postfix/sasl/smtpd.conf
+#sed -i "s/MYSQL_POSTFIX_PASS/${MYSQL_POSTFIX_PASS}/g" /etc/postfix/sasl/smtpd.conf
+#sed -i "s/MYSQL_POSTFIX_DB/${MYSQL_POSTFIX_DB}/g" /etc/postfix/sasl/smtpd.conf
+#sed -i "s=VMAIL_USER=${VMAIL_USER}=g" /etc/postfix/sasl/smtpd.conf
+#sed -i "s=VMAIL_GROUP=${VMAIL_GROUP}=g" /etc/postfix/sasl/smtpd.conf
+#sed -i "s=VMAIL_HOME=${VMAIL_HOME}=g" /etc/postfix/sasl/smtpd.conf
+
 
 
 #
-# Allow postfix to access sasl user group
+# Configure Dovecot
 #
-usermod -G sasl postfix
+if [ -f /etc/dovecot/dovecot.conf ]; then
+	mv /etc/dovecot/dovecot.conf /etc/dovecot/dovecot.conf.backup 
+fi
+
+if [ -f /etc/dovecot/dovecot-sql.conf.ext ]; then
+	mv /etc/dovecot/dovecot-sql.conf.ext /etc/dovecot/dovecot-sql.conf.ext.backup
+fi
+
+if [ -f /etc/dovecot/conf.d/10-auth.conf ]; then
+	mv /etc/dovecot/conf.d/10-auth.conf /etc/dovecot/conf.d/10-auth.conf.backup 
+fi
+
+if [ -f /etc/dovecot/conf.d/10-mail.conf ]; then
+	mv /etc/dovecot/conf.d/10-mail.conf /etc/dovecot/conf.d/10-mail.conf.backup 
+fi
+
+if [ -f /etc/dovecot/conf.d/10-master.conf ]; then
+	mv /etc/dovecot/conf.d/10-master.conf /etc/dovecot/conf.d/10-master.conf.backup 
+fi
+
+if [ -f /etc/dovecot/conf.d/10-ssl.conf ]; then
+	mv /etc/dovecot/conf.d/10-ssl.conf /etc/dovecot/conf.d/10-ssl.conf.backup 
+fi
+
+if [ -f /etc/dovecot/conf.d/auth-sql.conf.ext ]; then
+	mv /etc/dovecot/conf.d/auth-sql.conf.ext /etc/dovecot/conf.d/auth-sql.conf.ext.backup
+fi
+
+cp ./conf/dovecot/dovecot.conf /etc/dovecot/dovecot.conf
+cp ./conf/dovecot/conf.d/10-auth.conf /etc/dovecot/conf.d/10-auth.conf
+cp ./conf/dovecot/conf.d/10-mail.conf /etc/dovecot/conf.d/10-mail.conf
+cp ./conf/dovecot/conf.d/10-master.conf /etc/dovecot/conf.d/10-master.conf
+cp ./conf/dovecot/conf.d/10-ssl.conf /etc/dovecot/conf.d/10-ssl.conf
+cp ./conf/dovecot/conf.d/auth-sql.conf.ext /etc/dovecot/conf.d/auth-sql.conf.ext
+cp ./conf/dovecot/dovecot-sql.conf.ext /etc/dovecot/dovecot-sql.conf.ext
+
+#
+# Replace placeholder strings with real values
+#
+sed -i "s/MYSQL_POSTFIX_USER/${MYSQL_POSTFIX_USER}/g" /etc/dovecot/*.{conf,ext}
+sed -i "s/MYSQL_POSTFIX_PASS/${MYSQL_POSTFIX_PASS}/g" /etc/dovecot/*.{conf,ext}
+sed -i "s/MYSQL_POSTFIX_DB/${MYSQL_POSTFIX_DB}/g" /etc/dovecot/*.{conf,ext}
+sed -i "s=VMAIL_USER=${VMAIL_USER}=g" /etc/dovecot/*.{conf,ext}
+sed -i "s=VMAIL_GROUP=${VMAIL_GROUP}=g" /etc/dovecot/*.{conf,ext}
+sed -i "s=VMAIL_HOME=${VMAIL_HOME}=g" /etc/dovecot/*.{conf,ext}
+sed -i "s=SSL_CERT_FILE=${SSL_CERT_FILE}=g" /etc/dovecot/*.{conf,ext}
+sed -i "s=SSL_KEY_FILE=${SSL_KEY_FILE}=g" /etc/dovecot/*.{conf,ext}
+
+sed -i "s/MYSQL_POSTFIX_USER/${MYSQL_POSTFIX_USER}/g" /etc/dovecot/conf.d/*.{conf,ext}
+sed -i "s/MYSQL_POSTFIX_PASS/${MYSQL_POSTFIX_PASS}/g" /etc/dovecot/conf.d/*.{conf,ext}
+sed -i "s/MYSQL_POSTFIX_DB/${MYSQL_POSTFIX_DB}/g" /etc/dovecot/conf.d/*.{conf,ext}
+sed -i "s=VMAIL_USER=${VMAIL_USER}=g" /etc/dovecot/conf.d/*.{conf,ext}
+sed -i "s=VMAIL_GROUP=${VMAIL_GROUP}=g" /etc/dovecot/conf.d/*.{conf,ext}
+sed -i "s=VMAIL_HOME=${VMAIL_HOME}=g" /etc/dovecot/conf.d/*.{conf,ext}
+sed -i "s=SSL_CERT_FILE=${SSL_CERT_FILE}=g" /etc/dovecot/conf.d/*.{conf,ext}
+sed -i "s=SSL_KEY_FILE=${SSL_KEY_FILE}=g" /etc/dovecot/conf.d/*.{conf,ext}
+
+# Secure config files
+chgrp dovecot /etc/dovecot/*.conf
+chgrp dovecot /etc/dovecot/conf.d/*.{conf,ext}
+chmod 640 /etc/dovecot/*.conf
+chmod 640 /etc/dovecot/conf.d/*.{conf,ext}
+
 
 
 #
 # Restart services
 #
+service saslauthd restart
 service postfix restart
 service dovecot restart
 
