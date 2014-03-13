@@ -34,7 +34,7 @@ fi
 
 # Do updates
 apt-get update
-apt-get upgrade
+apt-get -y upgrade
 
 # Install random password generator
 apt-get -y install apg
@@ -51,6 +51,11 @@ echo "Generating secure MySQL postfix password... please wait."
 MYSQL_POSTFIX_USER=postfix
 MYSQL_POSTFIX_PASS=`create_password`
 MYSQL_POSTFIX_DB=postfix
+
+echo "Generating secure MySQL amavis password... please wait."
+MYSQL_AMAVIS_USER=amavis
+MYSQL_AMAVIS_PASS=`create_password`
+MYSQL_AMAVIS_DB=amavis
 
 VMAIL_USER=vmail
 VMAIL_GROUP=vmail
@@ -71,6 +76,7 @@ read HOSTNAME
 if [[ "${HOSTNAME}" != "" ]]; then
 	echo "Setting hostname"
 	echo ${HOSTNAME} > /etc/hostname
+	echo ${HOSTNAME} > /etc/mailname
 	hostname ${HOSTNAME}
 else
 	echo "Leaving hostname unchanged"
@@ -116,7 +122,7 @@ echo "postfix postfix/destinations string localhost.localdomain, localhost" | de
 #
 # Install required packages
 #
-apt-get -y install openssl apache2 php5 postfix-mysql libsasl2-2 sasl2-bin libsasl2-modules dovecot-common dovecot-mysql dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-managesieved dovecot-sieve mysql-server spamassassin clamav amavisd-new
+apt-get -y install openssl apache2 php5 postfix-mysql libsasl2-modules dovecot-common dovecot-mysql dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-managesieved dovecot-sieve mysql-server amavisd-new spamassassin clamav-daemon libnet-dns-perl pyzor razor arj bzip2 cabextract cpio file gzip nomarch pax rar unrar unzip zip zoo
 
 
 #
@@ -125,6 +131,15 @@ apt-get -y install openssl apache2 php5 postfix-mysql libsasl2-2 sasl2-bin libsa
 mysql -uroot -p"${MYSQL_ROOT_PASS}" -e "GRANT SELECT, INSERT, DELETE, UPDATE ON ${MYSQL_POSTFIX_DB}.* TO ${MYSQL_POSTFIX_USER}@localhost IDENTIFIED BY '${MYSQL_POSTFIX_PASS}';";
 mysql -uroot -p"${MYSQL_ROOT_PASS}" -e "CREATE DATABASE ${MYSQL_POSTFIX_DB};"
 mysql -uroot -p"${MYSQL_ROOT_PASS}" ${MYSQL_POSTFIX_DB} < ./conf/mysql/postfix.sql
+
+mysql -uroot -p"${MYSQL_ROOT_PASS}" -e "GRANT SELECT, INSERT, DELETE, UPDATE ON ${MYSQL_AMAVIS_DB}.* TO ${MYSQL_AMAVIS_USER}@localhost IDENTIFIED BY '${MYSQL_AMAVIS_PASS}';";
+mysql -uroot -p"${MYSQL_ROOT_PASS}" -e "CREATE DATABASE ${MYSQL_AMAVIS_DB};"
+mysql -uroot -p"${MYSQL_ROOT_PASS}" ${MYSQL_AMAVIS_DB} < ./conf/mysql/amavis.sql
+
+# We need to create a new view to allow a list of domains in the amavis DB
+#mysql -uroot -p"${MYSQL_ROOT_PASS}" -e "CREATE VIEW ${MYSQL_AMAVIS_DB}.vmail_domain AS SELECT DOMAIN FROM ${MYSQ_POSTFIX_DB}.domain";
+#mysql -uroot -p"${MYSQL_ROOT_PASS}" -e "GRANT SELECT ON ${MYSQL_POSTFIX_DB}.* TO ${MYSQL_AMAVIS_USER}@localhost;"
+# Commented this out for the moment because amavis is expecting a list of policy rules which we dont have at the moment
 
 
 #
@@ -233,6 +248,7 @@ cp ./conf/dovecot/conf.d/10-ssl.conf /etc/dovecot/conf.d/10-ssl.conf
 cp ./conf/dovecot/conf.d/auth-sql.conf.ext /etc/dovecot/conf.d/auth-sql.conf.ext
 cp ./conf/dovecot/dovecot-sql.conf.ext /etc/dovecot/dovecot-sql.conf.ext
 
+
 #
 # Replace placeholder strings with real values
 #
@@ -254,44 +270,78 @@ sed -i "s=VMAIL_HOME=${VMAIL_HOME}=g" /etc/dovecot/conf.d/*.{conf,ext}
 sed -i "s=SSL_CERT_FILE=${SSL_CERT_FILE}=g" /etc/dovecot/conf.d/*.{conf,ext}
 sed -i "s=SSL_KEY_FILE=${SSL_KEY_FILE}=g" /etc/dovecot/conf.d/*.{conf,ext}
 
+
 # Secure config files
-chgrp dovecot /etc/dovecot/*.conf
-chgrp dovecot /etc/dovecot/conf.d/*.{conf,ext}
+chgrp vmail /etc/dovecot/*.conf
+chgrp vmail /etc/dovecot/conf.d/
+chgrp vmail /etc/dovecot/conf.d/*.{conf,ext}
 chmod 640 /etc/dovecot/*.conf
 chmod 640 /etc/dovecot/conf.d/*.{conf,ext}
 
+
+#
+# Configure ClamAV / Amavis
+#
+cp ./conf/amavis/conf.d/50-user /etc/amavis/conf.d/50-user
+sed -i "s/HOSTNAME/${HOSTNAME}/g" /etc/amavis/conf.d/50-user
+sed -i "s/MYSQL_POSTFIX_USER/${MYSQL_POSTFIX_USER}/g" /etc/amavis/conf.d/50-user
+sed -i "s/MYSQL_POSTFIX_PASS/${MYSQL_POSTFIX_PASS}/g" /etc/amavis/conf.d/50-user
+sed -i "s/MYSQL_POSTFIX_DB/${MYSQL_POSTFIX_DB}/g" /etc/amavis/conf.d/50-user
+sed -i "s/MYSQL_AMAVIS_USER/${MYSQL_AMAVIS_USER}/g" /etc/amavis/conf.d/50-user
+sed -i "s/MYSQL_AMAVIS_PASS/${MYSQL_AMAVIS_PASS}/g" /etc/amavis/conf.d/50-user
+sed -i "s/MYSQL_AMAVIS_DB/${MYSQL_AMAVIS_DB}/g" /etc/amavis/conf.d/50-user
+
+# Secure config files
+chgrp vmail /etc/amavis/conf.d/*
+chmod 640 /etc/amavis/conf.d/*
+
+# Add users
+adduser clamav amavis
+adduser amavis clamav
+
+
+#
+# Configure spamassassin
+#
+sed -i "s/ENABLED=0/ENABLED=1/g" /etc/default/spamassassin
+sed -i "s/CRON=0/CRON=1/g" /etc/default/spamassassin
 
 
 #
 # Restart services
 #
-service saslauthd restart
+#service saslauthd restart
 service postfix restart
 service dovecot restart
-
+service amavis restart
+service clamav-daemon start
 
 #
 # Save important vars to installations.txt
 #
-cat > installation.txt <<TEXTBLOCK
+cat > installation.txt <<EOF
 
-MYSQL_ROOT_PASS=${MYSQL_ROOT_PASS}
+MYSQL_ROOT_PASS		= ${MYSQL_ROOT_PASS}
 
-MYSQL_POSTFIX_USER=${MYSQL_POSTFIX_USER}
-MYSQL_POSTFIX_PASS=${MYSQL_POSTFIX_PASS}
-MYSQL_POSTFIX_DB=${MYSQL_POSTFIX_DB}
+MYSQL_POSTFIX_USER	= ${MYSQL_POSTFIX_USER}
+MYSQL_POSTFIX_PASS	= ${MYSQL_POSTFIX_PASS}
+MYSQL_POSTFIX_DB	= ${MYSQL_POSTFIX_DB}
 
-VMAIL_USER=${VMAIL_USER}
-VMAIL_GROUP=${VMAIL_GROUP}
-VMAIL_HOME=${VMAIL_HOME}
+MYSQL_AMAVIS_USER	= ${MYSQL_AMAVIS_USER}
+MYSQL_AMAVIS_PASS	= ${MYSQL_AMAVIS_PASS}
+MYSQL_AMAVIS_DB		= ${MYSQL_AMAVIS_DB}
 
-SSL_COUNTRY_ISO2=${SSL_COUNTRY_ISO2}
-SSL_CITY=${SSL_CITY}
-SSL_STATE_PROVINCE=${SSL_STATE_PROVINCE}
-SSL_CERT_FILE=${SSL_CERT_FILE}
-SSL_KEY_FILE=${SSL_KEY_FILE}
+VMAIL_USER			= ${VMAIL_USER}
+VMAIL_GROUP			= ${VMAIL_GROUP}
+VMAIL_HOME			= ${VMAIL_HOME}
 
-TEXTBLOCK
+SSL_COUNTRY_ISO2	= ${SSL_COUNTRY_ISO2}
+SSL_CITY			= ${SSL_CITY}
+SSL_STATE_PROVINCE	= ${SSL_STATE_PROVINCE}
+SSL_CERT_FILE		= ${SSL_CERT_FILE}
+SSL_KEY_FILE		= ${SSL_KEY_FILE}
+
+EOF
 
 chmod 600 installation.txt
 

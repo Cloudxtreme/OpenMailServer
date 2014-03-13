@@ -1,0 +1,239 @@
+use strict;
+
+#
+# Place your configuration directives here.  They will override those in
+# earlier files.
+#
+# See /usr/share/doc/amavisd-new/ for documentation and examples of
+# the directives you can use in this file
+#
+
+
+# Set hostname.
+$myhostname = "HOSTNAME";
+
+# Set listen IP/PORT.
+$notify_method  = 'smtp:[localhost]:10025';
+$forward_method = 'smtp:[localhost]:10025';
+
+# Set default action.
+# Available actions: D_PASS, D_BOUNCE, D_REJECT, D_DISCARD.
+$final_virus_destiny      = D_DISCARD;
+$final_banned_destiny     = D_PASS;
+$final_spam_destiny       = D_PASS;
+$final_bad_header_destiny = D_PASS;
+
+# Apply to mails which coming from internal networks or authenticated
+# roaming users.
+# mail supposedly originating from our users
+$policy_bank{'MYUSERS'} = {
+    # declare that mail was submitted by our smtp client
+    originating => 1,
+
+    # enables disclaimer insertion if available
+    allow_disclaimers => 1,
+
+    # notify administrator of locally originating malware
+    virus_admin_maps => ["root\@$mydomain"],
+    spam_admin_maps  => ["root\@$mydomain"],
+
+    # forward to a smtpd service providing DKIM signing service
+    #forward_method => 'smtp:[localhost]:10027',
+
+    # force MTA conversion to 7-bit (e.g. before DKIM signing)
+    smtpd_discard_ehlo_keywords => ['8BITMIME'],
+
+    # don't remove NOTIFY=SUCCESS option
+    terminate_dsn_on_notify_success => 0,
+
+    # don't perform spam/virus/header check.
+    #bypass_spam_checks_maps => [1],
+    #bypass_virus_checks_maps => [1],
+    #bypass_header_checks_maps => [1],
+
+    # allow sending any file names and types
+    #bypass_banned_checks_maps => [1],
+};
+
+#
+# Port used to release quarantined mails.
+#
+$interface_policy{'9998'} = 'AM.PDP-INET';
+$policy_bank{'AM.PDP-INET'} = {
+    protocol => 'AM.PDP',       # select Amavis policy delegation protocol
+    inet_acl => [qw( 127.0.0.1 [::1] )],    # restrict access to these IP addresses
+    auth_required_release => 1,    # 0 - don't require secret_id for amavisd-release
+    #log_level => 4,
+    #always_bcc_by_ccat => {CC_CLEAN, 'admin@example.com'},
+};
+
+#########################
+# Quarantine mails.
+#
+
+# Don't quarantine mails with bad header.
+$bad_header_quarantine_method = undef;
+
+# Quarantine SPAM.
+# Where to store quarantined mail message:
+#   - 'local:spam-%i-%m', quarantine mail on local file system.
+#   - 'sql:', quarantine mail in SQL server specified in @storage_sql_dsn. 
+#   - undef, do not quarantine mail.
+#$spam_quarantine_method = undef;
+$spam_quarantine_method = 'sql:';
+$spam_quarantine_to = 'spam-quarantine';
+
+#########################
+# Quarantine VIRUS mails.
+#
+$virus_quarantine_to     = 'virus-quarantine';
+$virus_quarantine_method = 'sql:';
+
+#########################
+# Quarantine BANNED mails.
+#
+#$banned_files_quarantine_method = undef;
+# Or quarantine banned mail to SQL server.
+$banned_files_quarantine_method = 'sql:';
+$banned_quarantine_to = 'banned-quarantine';
+
+
+# Modify email subject, add '$sa_spam_subject_tag'.
+#   0:  disable
+#   1:  enable
+$sa_spam_modifies_subj = 1;
+
+# remove existing headers
+#$remove_existing_x_scanned_headers= 0;
+#$remove_existing_spam_headers = 0;
+
+# Leave empty (undef) to add no header.
+# Modify /usr/sbin/amavisd or /usr/sbin/amavisd-new file to add customize header in:
+#
+#   sub add_forwarding_header_edits_per_recip
+#
+#$X_HEADER_TAG = 'X-Virus-Scanned';
+#$X_HEADER_LINE = "by amavisd at $myhostname";
+
+# Notify virus sender?
+#$warnvirussender = 0;
+
+# Notify spam sender?
+#$warnspamsender = 0;
+
+# Notify sender of banned files?
+$warnbannedsender = 0;
+
+# Notify sender of syntactically invalid header containing non-ASCII characters?
+$warnbadhsender = 0;
+
+# Notify virus (or banned files) RECIPIENT?
+#  (not very useful, but some policies demand it)
+$warnvirusrecip = 0;
+$warnbannedrecip = 0;
+
+# Notify also non-local virus/banned recipients if $warn*recip is true?
+#  (including those not matching local_domains*)
+$warn_offsite = 0;
+
+#$notify_sender_templ      = read_text('/var/amavis/notify_sender.txt');
+#$notify_virus_sender_templ= read_text('/var/amavis/notify_virus_sender.txt');
+#$notify_virus_admin_templ = read_text('/var/amavis/notify_virus_admin.txt');
+#$notify_virus_recips_templ= read_text('/var/amavis/notify_virus_recips.txt');
+#$notify_spam_sender_templ = read_text('/var/amavis/notify_spam_sender.txt');
+#$notify_spam_admin_templ  = read_text('/var/amavis/notify_spam_admin.txt');
+
+$sql_allow_8bit_address = 1;
+$timestamp_fmt_mysql = 1;
+
+# a string to prepend to Subject (for local recipients only) if mail could
+# not be decoded or checked entirely, e.g. due to password-protected archives
+#$undecipherable_subject_tag = '***UNCHECKED*** ';  # undef disables it
+$undecipherable_subject_tag = undef;
+
+
+@local_domains_maps = ( ["."]);
+@mynetworks = qw( 127.0.0.0/8 [::1] [FE80::]/10 [FEC0::]/10
+                  10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 );
+
+# listen on multiple TCP ports. 9998 is used for releasing quarantined mails.
+$inet_socket_port = [10024, 9998,];
+
+
+@storage_sql_dsn = (
+    ['DBI:mysql:database=MYSQL_AMAVIS_DB;host=127.0.0.1;port=3306', 'MYSQL_AMAVIS_USER', 'MYSQL_AMAVIS_PASS'],
+    );
+
+#@lookup_sql_dsn =  (
+#    ['DBI:mysql:database=MYSQL_POSTFIX_DB;host=127.0.0.1;port=3306', 'MYSQL_POSTFIX_USER', 'MYSQL_POSTFIX_PASS'],
+#    );
+
+# For Amavisd-new-2.7.0 and later versions. Placeholder '%d' is available in Amavisd-2.7.0+.
+#$sql_select_policy = "SELECT domain FROM vmail_domain WHERE domain='%d'";
+
+# For Amavisd-new-2.6.x.
+# WARNING: IN() may cause MySQL lookup performance issue.
+#$sql_select_policy = "SELECT domain FROM vmail_domain WHERE CONCAT('@', domain) IN (%k)";
+
+
+# Enable virus check.
+@bypass_virus_checks_maps = (
+   %bypass_virus_checks,
+   @bypass_virus_checks_acl,
+   $bypass_virus_checks_re,
+   );
+
+# Enable spam check.
+@bypass_spam_checks_maps = (
+    %bypass_spam_checks,
+    @bypass_spam_checks_acl,
+    $bypass_spam_checks_re,
+    );
+
+$virus_admin = "root\@\$mydomain"; # due to D_DISCARD default
+$mailfrom_notify_admin = "root\@$mydomain";
+$mailfrom_notify_recip = "root\@$mydomain";
+$mailfrom_notify_spamadmin = "root\@$mydomain";
+
+# Mail notify.
+$mailfrom_notify_admin     = "root\@$mydomain";  # notifications sender
+$mailfrom_notify_recip     = "root\@$mydomain";  # notifications sender
+$mailfrom_notify_spamadmin = "root\@$mydomain"; # notifications sender
+$mailfrom_to_quarantine = ''; # null return path; uses original sender if undef
+
+# Disable defang banned mail.
+$defang_banned = 0;  # MIME-wrap passed mail containing banned name
+
+$policy_bank{'MYNETS'} = {   # mail originating from @mynetworks
+  originating => 1,  # is true in MYNETS by default, but let's make it explicit
+  os_fingerprint_method => undef,  # don't query p0f for internal clients
+  allow_disclaimers => 1,  # enables disclaimer insertion if available
+};
+
+$policy_bank{'ORIGINATING'} = {  # mail supposedly originating from our users
+  originating => 1,  # declare that mail was submitted by our smtp client
+  allow_disclaimers => 1,  # enables disclaimer insertion if available
+  # notify administrator of locally originating malware
+  virus_admin_maps => ["root\@$mydomain"],
+  spam_admin_maps  => ["root\@$mydomain"],
+  warnbadhsender   => 0,
+  warnbannedsender   => 0,
+  warnvirussender  => 1,
+  warnspamsender   => 1,
+  # forward to a smtpd service providing DKIM signing service
+  #forward_method => 'smtp:[amavis]:10027',
+  # force MTA conversion to 7-bit (e.g. before DKIM signing)
+  smtpd_discard_ehlo_keywords => ['8BITMIME'],
+  #bypass_banned_checks_maps => [1],  # allow sending any file names and types
+  terminate_dsn_on_notify_success => 0,  # don't remove NOTIFY=SUCCESS option
+};
+
+# SpamAssassin debugging. Default if off(0).
+# Note: '$log_level' variable above is required for SA debug.
+$log_level = 0;              # verbosity 0..5, -d
+$sa_debug = 0;
+
+
+
+#------------ Do not modify anything below this line -------------
+1;  # ensure a defined return

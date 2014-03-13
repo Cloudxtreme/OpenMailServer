@@ -59,7 +59,6 @@ recipient_bcc_maps = proxy:mysql:/etc/postfix/mysql_recipient_bcc_maps_user.cf, 
 relay_domains = $mydestination, proxy:mysql:/etc/postfix/mysql_relay_domains_maps.cf
 smtpd_sender_login_maps = proxy:mysql:/etc/postfix/mysql_sender_login_maps.cf
 
-
 virtual_mailbox_limit = 51200000
 virtual_minimum_uid = 5000
 virtual_uid_maps = static:5000
@@ -67,8 +66,7 @@ virtual_gid_maps = static:5000
 virtual_mailbox_base = VMAIL_HOME
 virtual_transport = dovecot
 
-#local_transport = virtual
-#local_recipient_maps = $virtual_mailbox_maps
+content_filter = smtp-amavis:[127.0.0.1]:10024
 
 home_mailbox = Maildir/
 
@@ -79,7 +77,7 @@ smtpd_tls_key_file = SSL_KEY_FILE
 
 # Restrictions
 
-smtpd_recipient_restrictions = reject_unauth_pipelining, permit_mynetworks, permit_sasl_authenticated, reject_non_fqdn_recipient, reject_unknown_recipient_domain reject_unauth_destination, permit
+smtpd_recipient_restrictions = reject_unauth_pipelining, permit_mynetworks, permit_sasl_authenticated, reject_non_fqdn_recipient, reject_unknown_recipient_domain, reject_unauth_destination, permit
 
 smtpd_sender_restrictions = permit_sasl_authenticated, permit_mynetworks, reject_non_fqdn_sender, reject_unknown_sender_domain, reject_unauth_pipelining, permit
 
